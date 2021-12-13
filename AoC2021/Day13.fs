@@ -58,9 +58,9 @@ let render points =
     for y in 0..ymax do
         for x in 0..xmax do
             if Seq.contains {x=x;y=y} points then
-                printf "#"
+                printf "**"
             else
-                printf "."
+                printf "  "
         printf "\n"
 
 let part2 (s: string) =

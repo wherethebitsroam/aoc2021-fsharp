@@ -1,46 +1,64 @@
 let data =
-    System.IO.File.ReadAllText @"../../day13.txt"
+    System.IO.File.ReadAllText @"../../day12.txt"
 
-let test2 =
-    "5483143223
-2745854711
-5264556173
-6141336146
-6357385478
-4167524645
-2176841721
-6882881134
-4846848554
-5283751526"
+// let test2 =
+//     "5483143223
+// 2745854711
+// 5264556173
+// 6141336146
+// 6357385478
+// 4167524645
+// 2176841721
+// 6882881134
+// 4846848554
+// 5283751526"
+
+// let test1 =
+//     "11111
+// 19991
+// 19191
+// 19991
+// 11111"
 
 let test1 =
-    "11111
-19991
-19191
-19991
-11111"
+    "start-A
+start-b
+A-c
+A-b
+b-d
+A-end
+b-end"
 
-let test =
-    "6,10
-0,14
-9,10
-0,3
-10,4
-4,11
-6,0
-6,12
-4,1
-0,13
-10,12
-3,4
-3,0
-8,4
-1,10
-2,14
-8,10
-9,0
+let test2 =
+    "dc-end
+HN-start
+start-kj
+dc-start
+dc-HN
+LN-dc
+HN-end
+kj-sa
+kj-HN
+kj-dc"
 
-fold along y=7
-fold along x=5"
+let test3 =
+    "fs-end
+he-DX
+fs-he
+start-DX
+pj-DX
+end-zg
+zg-sl
+zg-pj
+pj-he
+RW-he
+fs-DX
+pj-RW
+zg-RW
+start-pj
+he-WI
+zg-he
+pj-fs
+start-RW"
 
-printfn "%A" (Day13.part2 data)
+printfn "%A" (Day12.part2 data)
