@@ -1,11 +1,5 @@
 ﻿module Day10
 
-open System
-
-// For more information see https://aka.ms/fsharp-console-apps
-
-let lines = IO.File.ReadLines @"../../day10.txt"
-
 // let test =
 //     "[({(<(())[]>[[{[]{<()<>>\n\
 //     [(()[<>])]({[<{<<[]>>(\n\
@@ -19,9 +13,6 @@ let lines = IO.File.ReadLines @"../../day10.txt"
 //     <{([{{}}[<[[[<>{}]]]>[]]"
 
 // let lines = test.Split '\n'
-
-
-// lines |> Seq.iter (fun line -> printfn "%s" line)
 
 type Validation =
     | Ok
@@ -46,29 +37,6 @@ let points (c: char) =
     | '>' -> 25137
     | c -> failwithf "invalid char %c" c
 
-let rec matchChar stack chars =
-    match chars with
-    | [] ->
-        match stack with
-        | [] -> Ok
-        | s -> Incomplete s
-    | head :: tail ->
-        match head with
-        | '<'
-        | '('
-        | '{'
-        | '[' as s -> matchChar (s :: stack) tail
-        | h ->
-            match stack with
-            | [] -> Invalid h
-            | s :: stack ->
-                match (s, h) with
-                | ('(', ')')
-                | ('<', '>')
-                | ('[', ']')
-                | ('{', '}') -> matchChar (stack) tail
-                | (_, h) -> Invalid h
-
 let closer c =
     match c with
     | '<' -> '>'
@@ -85,6 +53,29 @@ let closerPoints c =
     | '>' -> 4L
     | c -> failwithf "invalid char %c" c
 
+let rec matchChar stack chars =
+    match chars with
+    | [] ->
+        match stack with
+        | [] -> Ok
+        | s -> Incomplete s
+    | head :: tail ->
+        // if the current character is an opener, add it
+        // to the stack and process the remaining
+        match head with
+        | '<'
+        | '('
+        | '{'
+        | '[' as s -> matchChar (s :: stack) tail
+        | h ->
+            match stack with
+            | [] -> Invalid h
+            | s :: stack ->
+                if h = closer s then
+                    matchChar (stack) tail
+                else
+                    Invalid h
+
 let autocomplete stack = stack |> List.map closer
 
 let autocompletePoints stack =
@@ -99,8 +90,8 @@ let parseLine (line: string) =
     let chars = Seq.toList line
     matchChar [] chars
 
-let part1 lines =
-    lines
+let part1 (data: string) =
+    data.Split '\n'
     |> Seq.map parseLine
     |> Seq.choose takeInvalid
     |> Seq.map points
@@ -111,13 +102,11 @@ let inline median input =
     let middle = (sorted.Length - 1) / 2
     sorted.[middle]
 
-let part2 lines =
-    lines
+let part2 (data: string) =
+    data.Split '\n'
     |> Seq.map parseLine
     |> Seq.choose takeIncomplete
     |> Seq.map autocomplete
     |> Seq.map autocompletePoints
     |> Seq.toList
     |> median
-
-printfn "%A" (part2 lines)
