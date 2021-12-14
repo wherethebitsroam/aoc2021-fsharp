@@ -50,36 +50,27 @@ let step m pairs =
 
 // since all characters are pairwise, we will have double
 // of all chars except for the first and last
-let counts (h: char) (t: char) (pairs: list<(char * char) * int64>) =
+let counts (ht: char * char) (pairs: list<(char * char) * int64>) =
     // add an extra copy of the first and last so everything is double
     // then divide the count by 2
-    ((h, t), 1L) :: pairs
+    (ht, 1L) :: pairs
     |> List.collect (fun (pair, count) -> [ (fst pair, count); (snd pair, count) ])
     |> groupSum
     |> List.map (fun (x, count) -> (x, count / 2L))
 
-let part1 (s: string) =
+let run i (s: string) =
     let (h, t, pairs, map) = parse s
     let mutable res = pairs
 
-    for _ in 0 .. 9 do
+    for _ in 1 .. i do
         res <- step map res
 
-    let count = counts h t res |> List.map snd
+    let count = counts (h, t) res |> List.map snd
     let max = count |> List.max
     let min = count |> List.min
 
     max - min
 
-let part2 (s: string) =
-    let (h, t, pairs, map) = parse s
-    let mutable res = pairs
+let part1 (s: string) = run 10 s
 
-    for _ in 0 .. 39 do
-        res <- step map res
-
-    let count = counts h t res |> List.map snd
-    let max = count |> List.max
-    let min = count |> List.min
-
-    max - min
+let part2 (s: string) = run 40 s
