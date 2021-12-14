@@ -43,6 +43,7 @@ let expand m (pair, count) =
     let expansion = Map.find pair m
     expansion |> List.map (fun pair -> (pair, count))
 
+// map each pair to their expansion, keeping the count, they re-group
 let step m pairs =
     pairs |> List.collect (expand m) |> groupSum
 
@@ -53,6 +54,8 @@ let counts (h: char) (t: char) (pairs: list<(char * char) * int64>) =
         pairs
         |> List.collect (fun (pair, count) -> [ (fst pair, count); (snd pair, count) ])
 
+    // add an extra copy of the head and tail so everything is double
+    // then divide the count by 2
     count @ [ (h, 1); (t, 1) ]
     |> groupSum
     |> List.map (fun (x, count) -> (x, count / 2L))
@@ -65,10 +68,9 @@ let part1 (s: string) =
     for _ in 0 .. 9 do
         res <- step map res
 
-    let count = counts h t res
-
-    let max = count |> List.map snd |> List.max
-    let min = count |> List.map snd |> List.min
+    let count = counts h t res |> List.map snd
+    let max = count |> List.max
+    let min = count |> List.min
 
     max - min
 
@@ -79,9 +81,8 @@ let part2 (s: string) =
     for _ in 0 .. 39 do
         res <- step map res
 
-    let count = counts h t res
-
-    let max = count |> List.map snd |> List.max
-    let min = count |> List.map snd |> List.min
+    let count = counts h t res |> List.map snd
+    let max = count |> List.max
+    let min = count |> List.min
 
     max - min
