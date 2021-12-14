@@ -10,11 +10,7 @@ let parseCave s =
     match s with
     | "start" -> Start
     | "end" -> End
-    | s ->
-        if s.ToUpper() = s then
-            Big s
-        else
-            Small s
+    | s -> if s.ToUpper() = s then Big s else Small s
 
 let parseLink (s: string) =
     let x = s.Split('-')
@@ -37,16 +33,16 @@ let parse (s: string) =
 
 let rec explore m (path: Cave list) (remaining: Set<Cave>): Cave list list =
     let cave = List.head path
-    m |> Map.find cave
-      |> Set.intersect remaining
-      |> Set.toList
-      |> List.collect (fun next -> 
-          match next with
-          | Start -> []
-          | End -> [End :: path]
-          | Small _ -> explore m (next :: path) (Set.remove next remaining ) 
-          | Big _ -> explore m (next :: path) remaining
-      )
+    m   |> Map.find cave
+        |> Set.intersect remaining
+        |> Set.toList
+        |> List.collect (fun next -> 
+            match next with
+            | Start -> []
+            | End -> [End :: path]
+            | Small _ -> explore m (next :: path) (Set.remove next remaining ) 
+            | Big _ -> explore m (next :: path) remaining
+        )
 
 let part1 s =
     let m = parse s
@@ -54,21 +50,23 @@ let part1 s =
     explore m [Start] (Set possible) |> List.length
 
 let remaining (visited: Map<Cave,int>): Set<Cave> =
-    let hasDouble = visited
-                    |> Map.fold (fun s cave count ->
-                        s || match cave with
-                             | Small _ -> count > 1
-                             | _ -> false
-                        ) false
+    let hasDouble = visited |> Map.exists (fun c v ->
+        match c with
+        | Small _ -> v > 1
+        | _ -> false
+    )
     
-    visited |> Map.filter (fun k v ->
-        match k with
-        | Small _ -> match v with
-                     | 0 -> true
-                     | 1 -> not hasDouble
-                     | _ -> false
-        | _ -> true
-    )   |> Map.keys
+    visited
+        |> Map.filter (fun k v ->
+            match k with
+            | Small _ ->
+                match v with
+                | 0 -> true
+                | 1 -> not hasDouble
+                | _ -> false
+            | _ -> true
+        )   
+        |> Map.keys
         |> Set
 
 let incrCave x =
@@ -78,15 +76,15 @@ let incrCave x =
 
 let rec explore2 m (path: Cave list) (visited: Map<Cave,int>): Cave list list =
     let cave = List.head path
-    m |> Map.find cave
-      |> Set.intersect (remaining visited)
-      |> Set.toList
-      |> List.collect (fun next -> 
-          match next with
-          | Start -> []
-          | End -> [End :: path]
-          | Small _ | Big _ -> explore2 m (next :: path) (Map.change next incrCave visited) 
-      )
+    m   |> Map.find cave
+        |> Set.intersect (remaining visited)
+        |> Set.toList
+        |> List.collect (fun next -> 
+            match next with
+            | Start -> []
+            | End -> [End :: path]
+            | _ -> explore2 m (next :: path) (Map.change next incrCave visited) 
+        )
 
 let part2 s =
     let m = parse s
