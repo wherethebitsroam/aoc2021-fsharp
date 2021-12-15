@@ -85,17 +85,6 @@ let step x =
     |> List.map (fun (p, v) -> (p, v + 1))
     |> flash (Set [])
 
-let render vals =
-    let l = side vals
-
-    for y in 0 .. (l - 1) do
-        for x in 0 .. (l - 1) do
-            let b = { x = x; y = y }
-            let (_, c) = vals |> List.find (fun (p, _) -> p = b)
-            printf "%d" c
-
-        printf "\n"
-
 
 let part1 (data: string) =
     let mutable vals = parse data

@@ -1,4 +1,16 @@
 let data =
-    System.IO.File.ReadAllText @"../../day11.txt"
+    System.IO.File.ReadAllText @"../../day15.txt"
 
-printfn "%A" (Day11.part2 data)
+let test =
+    "1163751742
+1381373672
+2136511328
+3694931569
+7463417111
+1319128137
+1359912421
+3125421639
+1293138521
+2311944581"
+
+printfn "%A" (Day15.part2 data)
