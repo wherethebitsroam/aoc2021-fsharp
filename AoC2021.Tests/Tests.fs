@@ -4,9 +4,6 @@ open System
 open Xunit
 
 [<Fact>]
-let ``My test`` () = Assert.True(true)
-
-[<Fact>]
 let ``Test mask`` () =
     Assert.Equal(byte 0b111, Bytecode.mask 3 3)
     Assert.Equal(byte 0b11100, Bytecode.mask 5 3)
