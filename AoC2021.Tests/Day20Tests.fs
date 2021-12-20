@@ -10,7 +10,7 @@ let ``Test toBinary`` () =
 
 [<Fact>]
 let ``test value`` () =
-    let img = parseImg "...\n#..\n.#."
+    let img = Image.parse "...\n#..\n.#."
     Assert.Equal(34, value img (1, 1))
 
 [<Fact>]
