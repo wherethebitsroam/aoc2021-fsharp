@@ -14,10 +14,10 @@ module Image =
         (bound fst img, bound snd img)
 
     let render img =
-        let ((ymin,ymax),(xmin,xmax)) = bounds img
-
         let renderLine img xs y =
             xs |> List.map (fun x -> if Map.tryFind (y,x) img = Some 1 then "#" else ".") |> String.concat ""
+
+        let ((ymin,ymax),(xmin,xmax)) = bounds img
 
         let header = sprintf "y: %d,%d, x: %d,%d, outside: %d" ymin ymax xmin xmax img.outside
 
@@ -33,7 +33,7 @@ module Image =
 
     let parse (s: string) =
         let parseLine (y: int, s: string) =
-            s |> Seq.indexed |> Seq.map (fun (x, c) -> if c = '#' then ((y,x),1) else (y,x),0)
+            s |> Seq.indexed |> Seq.map (fun (x, c) -> if c = '#' then (y,x),1 else (y,x),0)
 
         let map =
             s.Split("\n")
@@ -80,7 +80,7 @@ let step (alg: char array) (img: Image) =
 
     let newMap =
         List.allPairs [(ymin - 1)..(ymax + 1)] [(xmin - 1)..(xmax + 1)]
-        |> List.map (fun p -> if map p = '#' then (p,1) else (p,0))
+        |> List.map (fun p -> if map p = '#' then p,1 else p,0)
         |> Map.ofList
     
     { map = newMap; outside = updateOutside img.outside alg[0] }
