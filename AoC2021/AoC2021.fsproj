@@ -13,12 +13,12 @@
     <Compile Include="Day13.fs" />
     <Compile Include="Day14.fs" />
     <Compile Include="Day15.fs" />
-    <Compile Include="Day15_2.fs" />
     <Compile Include="Day16.fs" />
     <Compile Include="Day17.fs" />
     <Compile Include="Day18.fs" />
     <Compile Include="Day19.fs" />
     <Compile Include="Day20.fs" />
+    <Compile Include="Day21.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>
