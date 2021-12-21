@@ -35,6 +35,7 @@ let part1 pos1 pos2 =
 
     loser.score * dice.Count
 
+// get all the possible totals for 3 dice rolls, along with the counts of their occurance
 let possible =
     [ 1 .. 3 ]
     |> List.collect (fun r1 ->
@@ -53,6 +54,7 @@ let folder (m: Map<int, int64>) (p, c) =
         | None -> Some(c))
 
 let rec play2 (player: int) (chances: int64) (p1: Player) (p2: Player) =
+    // kick off a game for each possible roll
     possible
     |> List.collect (fun (roll, count) ->
         let pos = (p1.pos + roll - 1) % 10 + 1
@@ -62,8 +64,10 @@ let rec play2 (player: int) (chances: int64) (p1: Player) (p2: Player) =
         if score >= 21 then
             [ (player, chances * count) ]
         else
+            // switch players and go again
             let player = if player = 1 then 2 else 1
             play2 player (chances * count) p2 p1)
+    // collect all of the outcomes into a count for each player
     |> List.fold folder (Map [])
     |> Map.toList
 
