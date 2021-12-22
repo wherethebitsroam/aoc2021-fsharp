@@ -113,12 +113,10 @@ let part1 (s: string) =
     |> Set.count
 
 let overlap (step: Step) (prev: Step) =
-    match Cube.overlap step.cube prev.cube with
-    | Some (overlap) ->
-        Some
-            { onOff = OnOff.toggle prev.onOff
-              cube = overlap }
-    | None -> None
+    Cube.overlap step.cube prev.cube
+    |> Option.map (fun overlap ->
+        { onOff = OnOff.toggle prev.onOff
+          cube = overlap })
 
 let updates steps step =
     // make steps from where this step overlaps with previous steps
