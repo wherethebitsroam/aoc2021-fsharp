@@ -11,6 +11,11 @@ module OnOff =
         | "off" -> Off
         | x -> failwithf "bad: %s" x
 
+    let toggle onOff =
+        match onOff with
+        | On -> Off
+        | Off -> On
+
 type Cube =
     { x: int * int
       y: int * int
@@ -110,11 +115,9 @@ let part1 (s: string) =
 let overlap (step: Step) (prev: Step) =
     match Cube.overlap step.cube prev.cube with
     | Some (overlap) ->
-        match (prev.onOff, step.onOff) with
-        | (On, On) -> Some { onOff = Off; cube = overlap }
-        | (Off, Off) -> Some { onOff = On; cube = overlap }
-        | (On, Off) -> Some { onOff = Off; cube = overlap }
-        | (Off, On) -> Some { onOff = On; cube = overlap }
+        Some
+            { onOff = OnOff.toggle prev.onOff
+              cube = overlap }
     | None -> None
 
 let updates steps step =
