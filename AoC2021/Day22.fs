@@ -39,12 +39,12 @@ module Cube =
               z = parseRange z }
         | _ -> failwith "bad cube"
 
-    let range (a, b) =
-        let a = max a -50
-        let b = min b 50
-        [ a .. b ]
+    let points s =
+        let range (a, b) =
+            let a = max a -50
+            let b = min b 50
+            [ a .. b ]
 
-    let makeRange s =
         range s.x
         |> List.collect (fun x ->
             range s.y
@@ -81,7 +81,7 @@ module Step =
             { onOff = OnOff.parse oo
               cube = Cube.parse rest }
 
-        | _ -> failwith "bad"
+        | _ -> failwith "bad step"
 
     let size s =
         match s.onOff with
@@ -99,7 +99,7 @@ let updateSet onOff set point =
     | Off -> Set.remove point set
 
 let applyStep set step =
-    Cube.makeRange step.cube
+    Cube.points step.cube
     |> List.fold (updateSet step.onOff) set
 
 let part1 (s: string) =
@@ -118,13 +118,16 @@ let overlap (step: Step) (prev: Step) =
     | None -> None
 
 let updates steps step =
+    // make steps from where this step overlaps with previous steps
     let overlaps = steps |> List.choose (overlap step)
 
+    // if this step is an On step, add to the list
     let updates =
         match step.onOff with
         | On -> overlaps @ [ step ]
         | Off -> overlaps
 
+    // add to the previous steps
     steps @ updates
 
 let part2 (s: string) =
