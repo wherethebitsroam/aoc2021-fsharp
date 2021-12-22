@@ -16,66 +16,60 @@ module OnOff =
         | On -> Off
         | Off -> On
 
-type Cube =
-    { x: int * int
-      y: int * int
-      z: int * int }
+type Range = int * int
+
+module Range =
+    let overlap (a1, a2) (b1, b2) =
+        if (a1 >= b1 && a1 <= b2) || (b1 >= a1 && b1 <= a2) then
+            Some(max a1 b1, min a2 b2)
+        else
+            None
+
+    let toList (a, b) = [ (max a -50) .. (min b 50) ]
+
+    // x=30018..52561
+    let parse (s: string) =
+        match s.Split("=") with
+        | [| _; s |] ->
+            match s.Split("..") with
+            | [| a; b |] ->
+                // sort the range to make things easier later
+                let a = int a
+                let b = int b
+                if b > a then (a, b) else (b, a)
+            | x -> failwithf "bad range: %A" x
+        | x -> failwithf "bad range: %A" x
+
+    let len (a, b) = int64 (b - a + 1)
+
+type Cube = { x: Range; y: Range; z: Range }
 
 module Cube =
     // x=30018..52561,y=6820..20726,z=63544..81739
     let parse (s: string) =
-        // x=30018..52561
-        let parseRange (s: string) =
-            match s.Split("=") with
-            | [| _; s |] ->
-                match s.Split("..") with
-                | [| a; b |] ->
-                    // sort the range to make things easier later
-                    let a = int a
-                    let b = int b
-                    if b > a then (a, b) else (b, a)
-                | x -> failwithf "bad range: %A" x
-            | x -> failwithf "bad range: %A" x
-
         match s.Split(",") with
         | [| x; y; z |] ->
-            { x = parseRange x
-              y = parseRange y
-              z = parseRange z }
+            { x = Range.parse x
+              y = Range.parse y
+              z = Range.parse z }
         | _ -> failwith "bad cube"
 
     let points s =
-        let range (a, b) =
-            let a = max a -50
-            let b = min b 50
-            [ a .. b ]
-
-        range s.x
+        Range.toList s.x
         |> List.collect (fun x ->
-            range s.y
-            |> List.collect (fun y -> range s.z |> List.map (fun z -> (x, y, z))))
+            Range.toList s.y
+            |> List.collect (fun y -> Range.toList s.z |> List.map (fun z -> (x, y, z))))
 
     let overlap c1 c2 =
-        let overlap1D (a1, a2) (b1, b2) =
-            if a1 >= b1 && a1 <= b2 then
-                if a2 >= b1 && a2 <= b2 then
-                    Some(a1, a2)
-                else
-                    Some(a1, b2)
-            elif a2 >= b1 && a2 <= b2 then
-                Some(b1, a2)
-            elif b1 >= a1 && b1 <= a2 then
-                Some(b1, b2)
-            else
-                None
-
-        match (overlap1D c1.x c2.x, overlap1D c1.y c2.y, overlap1D c1.z c2.z) with
-        | (Some x, Some y, Some z) -> Some { x = x; y = y; z = z }
-        | _ -> None
+        Range.overlap c1.x c2.x
+        |> Option.bind (fun x ->
+            Range.overlap c1.y c2.y
+            |> Option.bind (fun y ->
+                Range.overlap c1.z c2.z
+                |> Option.map (fun z -> { x = x; y = y; z = z })))
 
     let size c =
-        let len (a, b) = int64 (b - a + 1)
-        len c.x * len c.y * len c.z
+        Range.len c.x * Range.len c.y * Range.len c.z
 
 type Step = { onOff: OnOff; cube: Cube }
 
