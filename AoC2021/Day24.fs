@@ -13,7 +13,7 @@ module Variable =
         | "x" -> X
         | "y" -> Y
         | "z" -> Z
-        | _ -> failwithf "unknown variable %s" s
+        | _ -> failwithf "unknown variable '%s'" s
 
     let var v =
         match v with
@@ -43,14 +43,6 @@ type Op =
     | Eql
 
 module Op =
-    let fn op =
-        match op with
-        | Add -> fun x y -> x + y
-        | Mul -> fun x y -> x * y
-        | Div -> fun x y -> x / y
-        | Mod -> fun x y -> x % y
-        | Eql -> fun x y -> if x = y then 1 else 0
-
     let fn64 op =
         match op with
         | Add -> fun x y -> x + y
@@ -84,151 +76,303 @@ type Calc =
     | Idx of int
     // an explicit value
     | Val of int
-    // An Op between 2 Calcs in the calc table
-    | Calc of Op * int * int
-    // A ref to another table value
-    | Ref of int
+    // a variable
+    | Var of int
+    // An Op between 2 Calcs in the calc map
+    | Calc of Op * Calc * Calc
 
 module Calc =
-    let print c =
+    let rec print c =
         match c with
         | Idx i -> sprintf "[%d]" i
         | Val v -> sprintf "%d" v
-        | Ref r -> sprintf "@%d" r
+        | Var v -> sprintf "x%d" v
         | Calc (op, l, r) ->
             match op with
-            | Add -> sprintf "calc @%d + @%d" l r
-            | Mul -> sprintf "calc @%d * @%d" l r
-            | Div -> sprintf "calc @%d / @%d" l r
-            | Mod -> sprintf "calc @%d %% @%d" l r
-            | Eql -> sprintf "calc @%d = @%d" l r
+            | Add -> sprintf "%s + %s" (print l) (print r)
+            | Mul -> sprintf "%s * %s" (print l) (print r)
+            | Div -> sprintf "%s / %s" (print l) (print r)
+            | Mod -> sprintf "%s %% %s" (print l) (print r)
+            | Eql -> sprintf "%s = %s" (print l) (print r)
 
-type ALU =
-    { vars: Map<Variable, int>
-      idx: int
-      calcs: Calc array
-      calcIdx: int }
+type ALU = { output: int; calcs: Map<int, Calc> }
 
 module ALU =
-    let create =
-        { vars = [ (W, 0); (X, 0); (Y, 0); (Z, 0) ] |> Map.ofList
-          idx = 0
-          calcs = [| Val 0 |] // all vars initially have a zero value
-          calcIdx = 1 }
+    let parse (s: string) =
+        let mutable vars =
+            [ (W, 0); (X, 0); (Y, 0); (Z, 0) ] |> Map.ofList
 
-    let apply inst alu =
-        match inst with
-        | Inp v ->
-            let calcs =
-                Array.append alu.calcs [| (Idx alu.idx) |]
+        let mutable next = 1
+        let mutable idx = 0
 
-            let vars = Map.add v alu.calcIdx alu.vars
+        let initial = [ (0, Val 0) ] |> Map.ofList
 
-            { vars = vars
-              idx = alu.idx + 1
-              calcs = calcs
-              calcIdx = alu.calcIdx + 1 }
-        | Op (op, v, arg) ->
-            match arg with
-            | Variable va ->
-                let calc =
-                    Calc(op, Map.find v alu.vars, Map.find va alu.vars)
+        let folder calcs inst =
+            match inst with
+            | Inp v ->
+                let calcs = Map.add next (Idx idx) calcs
 
-                let calcs = Array.append alu.calcs [| calc |]
+                vars <- Map.add v next vars
+                idx <- idx + 1
+                next <- next + 1
 
-                let vars = Map.add v alu.calcIdx alu.vars
+                calcs
+            | Op (op, v, arg) ->
+                let vver = (Map.find v vars)
 
-                { alu with
-                    calcs = calcs
-                    vars = vars
-                    calcIdx = alu.calcIdx + 1 }
-            | Number x ->
-                let calc =
-                    Calc(op, Map.find v alu.vars, alu.calcIdx)
+                let a =
+                    match arg with
+                    | Variable a ->
+                        let asub = (Map.find a vars)
+                        Var asub
+                    | Number x -> Val x
 
                 let calcs =
-                    Array.append alu.calcs [| (Val x); calc |]
+                    Map.add next (Calc(op, Var vver, a)) calcs
 
-                let vars = Map.add v (alu.calcIdx + 1) alu.vars
+                vars <- Map.add v next vars
+                next <- next + 1
 
-                { alu with
-                    calcs = calcs
-                    vars = vars
-                    calcIdx = alu.calcIdx + 2 }
+                calcs
+
+        let calcs =
+            s.Trim().Split("\n")
+            |> Seq.map Instruction.parse
+            |> Seq.fold folder initial
+
+        { calcs = calcs
+          output = Map.find Z vars }
+
+
+    // makes a Set of all variables referenced in calculations
+    let referenced alu =
+        let referenced =
+            alu.calcs
+            |> Map.values
+            |> Seq.toList
+            |> List.collect (fun c ->
+                match c with
+                | Idx _ -> []
+                | Val _ -> []
+                | Var v -> [ v ]
+                | Calc (_, v1, v2) ->
+                    match v1, v2 with
+                    | Var v1, Var v2 -> [ v1; v2 ]
+                    | _, Var v2 -> [ v2 ]
+                    | Var v1, _ -> [ v1 ]
+                    | _ -> [])
+
+        alu.output :: referenced |> Set.ofList
+
+    let removeUnreferenced alu =
+        let refs = referenced alu
+
+        let calcs =
+            Map.filter (fun k _ -> Set.contains k refs) alu.calcs
+
+        { alu with calcs = calcs }
+
+    let substitute alu =
+        let subs =
+            alu.calcs
+            |> Map.filter (fun _ c ->
+                match c with
+                | Calc _ -> false
+                | _ -> true)
+
+        let sub c =
+            match c with
+            | Var v ->
+                match Map.tryFind v subs with
+                | Some x -> x
+                | _ -> c
+            | _ -> c
+
+        let calcs =
+            alu.calcs
+            |> Map.map (fun v c ->
+                match c with
+                | Calc (op, l, r) ->
+                    let l = sub l
+                    let r = sub r
+                    Calc(op, l, r)
+                | Var _ -> sub c
+                | _ -> c)
+
+        { alu with calcs = calcs }
+
+    let minMax alu =
+        let min (x, _) = x
+        let max (_, x) = x
+
+        let rec calcMinMax c m =
+            match c with
+            | Idx _ -> (1L, 9L)
+            | Val x -> (x, x)
+            | Var v -> Map.find v m
+            | Calc (op, l, r) ->
+                let l = calcMinMax l m
+                let r = calcMinMax r m
+
+                match op with
+                | Add -> (min l + min r, max l + max r)
+                | Mul -> (min l * min r, max l * max r)
+                | Div -> (min l / max r, max l / min r)
+                | Mod -> (0, [ max l; max r ] |> List.min)
+                | Eql -> (0, 1)
+
+        // FIXME ordering!!
+        alu.calcs
+        |> Map.fold
+            (fun m v c ->
+                let mm = calcMinMax c m
+                Map.add v mm m)
+            (Map [])
+        |> Map.find alu.output
+
+    let extract vv alu =
+        let mutable take = true
+
+        // FIXME ordering!!
+        let calcs =
+            alu.calcs
+            |> Map.filter (fun v _ ->
+                if v = vv then
+                    take <- false
+                    true
+                else
+                    take)
+
+        { output = vv; calcs = calcs }
+
+    let find v alu = alu.calcs |> Map.find v
 
     let simplify alu =
-        let calcs = alu.calcs
+        let calcs =
+            alu.calcs
+            |> Map.map (fun v c ->
+                match c with
+                | Calc (op, l, r) ->
+                    match op with
+                    | Add ->
+                        match l, r with
+                        | Val l, Val r -> Val(l + r)
+                        | Val 0, x
+                        | x, Val 0 -> x
+                        // ((x + a) + b) = x + (a+b)
+                        | Var var, Val v1
+                        | Val v1, Var var ->
+                            match find var alu with
+                            | Calc (Add, x, Val v2)
+                            | Calc (Add, Val v2, x) -> Calc(Add, x, Val(v1 + v2))
+                            | _ -> c
+                        | _ -> c
+                    | Mul ->
+                        match l, r with
+                        | Val 0, _
+                        | _, Val 0 -> Val 0
+                        | Val 1, x
+                        | x, Val 1 -> x
+                        | _ -> c
+                    | Div ->
+                        match l, r with
+                        | Val 0, _ -> Val 0
+                        | x, Val 1 -> x
+                        // ((x * b) + y) / b = x
+                        | Var v, Val b1 ->
+                            match find v alu with
+                            | Calc (Add, Var v1, _) ->
+                                match find v1 alu with
+                                | Calc (Mul, x, Val b2) when b2 = b1 -> x
+                                | _ -> c
+                            | _ -> c
+                        | _ -> c
+                    | Mod ->
+                        match l, r with
+                        | Val 0, _ -> Val 0
+                        | Var v, Val b1 ->
+                            match find v alu with
+                            // ((x * b) + y) % b = y
+                            | Calc (Add, Var v1, y) ->
+                                match find v1 alu with
+                                | Calc (Mul, _, Val b2) when b2 = b1 -> y
+                                | _ -> c
+                            // (idx + x) % b = idx + x (when x + 9 <= b)
+                            | Calc (Add, Idx i, Val x) when x + 9 <= b1 -> Calc(Add, Idx i, Val x)
+                            | _ -> c
+                        | _ -> c
+                    | Eql ->
+                        match l, r with
+                        | Val l, Val r -> Val(if l = r then 1 else 0)
+                        | Val v, Idx _
+                        | Idx _, Val v when v < 1 || v > 9 -> Val 0
+                        | Var v, Idx _ ->
+                            let mm = extract v alu |> minMax
 
-        calcs
-        |> Array.indexed
-        |> Array.iter (fun (i, c) ->
-            match c with
-            | Idx _ -> ()
-            | Val _ -> ()
-            | Ref _ -> ()
-            | Calc (op, l, r) ->
-                match op with
-                | Mul ->
-                    match calcs.[l], calcs.[r] with
-                    | Val 0, _
-                    | _, Val 0 -> calcs.[i] <- Val 0
-                    | Val 1, Calc _ -> calcs.[i] <- Ref r
-                    | Calc _, Val 1 -> calcs.[i] <- Ref l
-                    | Val 1, x
-                    | x, Val 1 -> calcs.[i] <- x
-                    | Val v1, Val v2 -> calcs.[i] <- Val(v1 * v2)
-                    | _ -> ()
-                | Add ->
-                    match calcs.[l], calcs.[r] with
-                    | Val 0, Calc _ -> calcs.[i] <- Ref r
-                    | Calc _, Val 0 -> calcs.[i] <- Ref l
-                    | Val 0, x
-                    | x, Val 0 -> calcs.[i] <- x
-                    | Val v1, Val v2 -> calcs.[i] <- Val(v1 + v2)
-                    | _ -> ()
-                | Div ->
-                    match calcs.[l], calcs.[r] with
-                    | Calc _, Val 1 -> calcs.[i] <- Ref l
-                    | x, Val 1 -> calcs.[i] <- x
-                    | Val v1, Val v2 -> calcs.[i] <- Val(v1 / v2)
-                    | _ -> ()
-                | Mod ->
-                    match calcs.[l], calcs.[r] with
-                    | Val v1, Val v2 -> calcs.[i] <- Val(v1 % v2)
-                    | _ -> ()
-                | Eql ->
-                    match calcs.[l], calcs.[r] with
-                    | Val v1, Val v2 -> calcs.[i] <- Val(if v1 = v2 then 1 else 0)
-                    | _ -> ())
+                            if fst mm > 9 || snd mm < 1 then
+                                Val 0
+                            else
+                                c
+                        | _ -> c
+                | _ -> c)
+
+        { alu with calcs = calcs }
+
+    let reduce alu =
+        let mutable count = 0
+        let mutable alu = alu
+
+        while Map.count alu.calcs <> count do
+            count <- Map.count alu.calcs
+
+            alu <-
+                alu
+                |> simplify
+                |> substitute
+                |> removeUnreferenced
 
         alu
 
-    let parse (s: string) =
-        s.Trim().Split("\n")
-        |> Seq.map Instruction.parse
-        |> Seq.fold (fun alu inst -> apply inst alu) create
+    let rec removeBranching path alu =
+        let findNextEql alu =
+            alu.calcs
+            |> Map.keys
+            |> Seq.sort
+            |> Seq.tryFind (fun v ->
+                match Map.find v alu.calcs with
+                | Calc (Eql, _, _) -> true
+                | _ -> false)
+
+        let contains x (a, b) = a <= x && x <= b
+
+        match findNextEql alu with
+        | Some vv ->
+            // try 1 and 0
+            [ 0; 1 ]
+            |> List.collect (fun eqlVal ->
+                let calcs = alu.calcs |> Map.add vv (Val eqlVal)
+
+                let newAlu =
+                    { calcs = calcs; output = alu.output } |> reduce
+
+                if contains 0L (minMax newAlu) then
+                    // possible solution
+                    let ifStmt = extract vv alu |> reduce
+
+                    removeBranching (path @ [ (ifStmt, eqlVal) ]) newAlu
+                else
+                    [])
+        | None -> [ path ]
 
     let print alu =
-        printfn "%A" alu.vars
+        printfn "%A" alu.output
 
         alu.calcs
-        |> Array.indexed
-        |> Array.iter (fun (i, calc) -> printfn "%03d: %s" i (Calc.print calc))
+        |> Map.keys
+        |> Seq.sort
+        |> Seq.iter (fun v -> printfn "x%d = %s" v (Calc.print (Map.find v alu.calcs)))
 
-    let eval (arr: int array) alu =
-        let out = Array.create (Array.length alu.calcs) 0
-
-        alu.calcs
-        |> Array.indexed
-        |> Array.iter (fun (i, c) ->
-            match c with
-            | Idx idx -> out.[i] <- arr.[idx]
-            | Val v -> out.[i] <- v
-            | Ref r -> out.[i] <- out.[r]
-            | Calc (op, l, r) -> out.[i] <- Op.fn op out.[l] out.[r])
-
-        out.[Map.find Z alu.vars]
-
+        printfn "count: %d" (Map.count alu.calcs)
 
 let rec numToList (num: int64) =
     if num < 10 then
@@ -266,151 +410,7 @@ module Simple =
 
         Map.find Z res
 
-// So, evaluating in fsharp was too slow and I couldn't find a good
-// way to "solve" it, so I thought I would export to AssemblyScript,
-// compile to wasm and it would be much faster. It was, but not fast
-// enough. So I refactored to:
-//
-// export function day24calc(arr: Int8Array): i64 {
-//   var z: i64 = 0
-//
-//   z = arr[0] + 12
-//
-//   z = z * 26 + arr[1] + 7
-//
-//   z = z * 26 + arr[2] + 8
-//
-//   z = z * 26 + arr[3] + 8
-//
-//   if (arr[4] - 1 != arr[5]) {
-//     z = z * 26 + arr[5] + 12
-//   }
-//   if (z % 26 + 10 != arr[6]) {
-//     z = z * 26 + arr[6] + 8
-//   }
-//   if (z % 26 - 11 == arr[7]) {
-//     z = z / 26
-//   } else {
-//     z = (z / 26) * 26 + arr[7] + 13
-//   }
-//   if (z % 26 - 13 == arr[8]) {
-//     z = z / 26
-//   } else {
-//     z = (z / 26) * 26 + arr[8] + 3
-//   }
-//   if (z % 26 + 13 != arr[9]) {
-//     z = z * 26 + arr[9] + 13
-//   }
-//   if (z % 26 - 8 == arr[10]) {
-//     z = z / 26
-//   } else {
-//     z = (z / 26) * 26 + arr[10] + 3
-//   }
-//   if (z % 26 - 1 == arr[11]) {
-//     z = z / 26 >> 0
-//   } else {
-//     z = (z / 26 >> 0) * 26 + arr[11] + 9
-//   }
-//   if (z % 26 - 4 == arr[12]) {
-//     z = z / 26
-//   } else {
-//     z = (z / 26) * 26 + arr[12] + 4
-//   }
-//   if (z % 26 - 14 == arr[13]) {
-//     z = z / 26
-//   } else {
-//     z = (z / 26) * 26 + arr[13] + 13
-//   }
-//   return z
-// }
-//
-// It was faster, but still not fast enough (~10million numbers per second)
-// But I realised that it was sort of making base 26 numbers
-// and shifting them left and right, which led to:
-//
-// export function day24calc2(arr: Int8Array): i64 {
-//   var b26 = new Int8Array(14);
-//
-//   b26[0] = arr[0] + 12
-//   b26[1] = arr[1] + 7
-//   b26[2] = arr[2] + 8
-//   b26[3] = arr[3] + 8
-//   var cur = 3
-//
-//   if (arr[4] - 1 != arr[5]) {
-//     cur++
-//     b26[cur] = arr[5] + 12
-//   }
-//
-//   cur++
-//   b26[cur] = arr[6] + 8
-//
-//   if (arr[6] - 3 == arr[7]) {
-//     cur--
-//   } else {
-//     b26[cur] = arr[7] + 13
-//   }
-//
-//   if (b26[cur] - 13 == arr[8]) {
-//     cur--
-//   } else {
-//     b26[cur] = arr[8] + 3
-//   }
-//
-//   cur++
-//   b26[cur] = arr[9] + 13
-//
-//   if (arr[9] + 5 == arr[10]) {
-//     cur--
-//   } else {
-//     b26[cur] = arr[10] + 3
-//   }
-//
-//   if (b26[cur] - 1 == arr[11]) {
-//     cur--
-//   } else {
-//     b26[cur] = arr[11] + 9
-//   }
-//
-//   if (b26[cur] - 4 == arr[12]) {
-//     cur--
-//   } else {
-//     b26[cur] = arr[12] + 4
-//   }
-//
-//   if (b26[cur] - 14 == arr[13]) {
-//     cur--
-//   } else {
-//     b26[cur] = arr[13] + 13
-//   }
-//
-//   var z: i64 = 0
-//   for (var i = 0; i <= cur; i++) {
-//     z = z * 26 + b26[i]
-//   }
-//
-//   return z
-// }
-//
-// Which was about 2 x slower. BUT I realised that
-// since everything assigned to b26 was a +ve integer,
-// the only way the result could be 0 was if the number
-// of right shift equalled the number of left shifts.
-// The only way this was possible is if the first if
-// statement was false and all of the rest were true.
-// Following this logic led to these rules for getting 0:
-//
-// arr[5] = arr[4] - 1
-// arr[7] = arr[6] - 3
-// arr[8] = arr[3] - 5
-// arr[10] = arr[9] + 5
-// arr[11] = arr[2] + 7
-// arr[12] = arr[1] + 3
-// arr[13] = arr[0] - 2
-//
-// Which I then used for making the biggest and smallest number
-
-module AS =
+module AssemblyScript =
     let export (s: string) =
         let mutable idx = 0
 
@@ -436,13 +436,70 @@ module AS =
                 | Mod -> printfn "%s = %s %% %s" v v r
                 | Eql -> printfn "%s = %s == %s ? 1 : 0" v v r)
 
+type MinMax =
+    | Min
+    | Max
+
+let result (mm: MinMax) rules =
+    let max (a: int array) (i1: int) (i2: int) (x: int) =
+        if x > 0 then
+            a.[i1] <- 9
+            a.[i2] <- 9 - x
+        else
+            a.[i1] <- 9 + x
+            a.[i2] <- 9
+
+        a
+
+    let min (a: int array) (i1: int) (i2: int) (x: int) =
+        if x > 0 then
+            a.[i1] <- 1 + x
+            a.[i2] <- 1
+        else
+            a.[i1] <- 1
+            a.[i2] <- 1 - x
+
+        a
+
+    let folder (a: int array) (alu: ALU, expected: int) =
+        if expected <> 1 then
+            failwith "expected 1"
+
+        // x240 = [0] + -2
+        // x241 = x240 = [13]
+        match ALU.find alu.output alu with
+        | Calc (Eql, Var v, Idx i1) ->
+            match ALU.find v alu with
+            | Calc (Add, Idx i2, Val x) ->
+                match mm with
+                | Min -> min a i1 i2 x
+                | Max -> max a i1 i2 x
+            | _ -> failwith "expected add"
+        | _ -> failwith "expected calc"
+
+    rules |> List.fold folder (Array.create 14 0)
 
 let part1 (s: string) =
-    let test =
-        numToList 13579246899999L |> Array.ofList
+    let alu = ALU.parse s |> ALU.reduce
 
-    let alu = ALU.parse s |> ALU.simplify
-    printfn "ALU: %d" (ALU.eval test alu)
-    printfn "Simple: %d" (Simple.eval s test)
+    // ALU.print alu
+    // printfn "min/max: %A" (ALU.minMax alu)
 
-    AS.export s
+    // let blah = ALU.extract (X, 35) alu |> ALU.reduce
+    // ALU.print blah
+    // printfn "min/max: %A" (ALU.minMax blah)
+
+    let rules =
+        alu |> ALU.removeBranching [] |> List.head
+
+    printfn
+        "%s"
+        (result Max rules
+         |> Array.map string
+         |> String.concat "")
+
+    printfn
+        "%s"
+        (result Min rules
+         |> Array.map string
+         |> String.concat "")

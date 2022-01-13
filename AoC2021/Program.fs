@@ -1,5 +1,5 @@
 let data =
-    System.IO.File.ReadAllText @"../../day25.txt"
+    System.IO.File.ReadAllText @"../../day24-are.txt"
 
 let test =
     "v...>>.vv>
@@ -12,4 +12,4 @@ v>v.vv.v..
 v.v..>>v.v
 ....v..v.>"
 
-printfn "%A" (Day25.part1 data)
+printfn "%A" (Day24.part1 data)
